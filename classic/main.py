@@ -15,6 +15,7 @@ from rich.layout import Layout
 from rich import print as p
 from rich.table import Table
 from rich.panel import Panel
+from rich.prompt import Prompt
 # Some Authentication Methods
 
 import json
@@ -34,18 +35,51 @@ app = typer.Typer()
 todo_filter = 'assignee = currentUser() AND status = "To Do"'
 prog_filter = 'assignee = currentUser() AND status = "In Progress"'
 
+state = {}
 
 @app.command()
 def init():
     todo = jira.search_issues(todo_filter)
     prog = jira.search_issues(prog_filter)
-    display_fields(todo,prog)
+    todo, prog = display_fields(todo,prog) 
+    state.update(todo)
+    state.update(prog)
+    state['jira'] = jira
+    getPrompt()
 
+#iterate through table to get issue list and save to memory
 def generate_table(title,array):
     table = Table(title = 'title')
+    d = {}
     for i in array:
+        d[i.key] = i
         table.add_row(Panel(i.fields.summary,title=i.key))
-    return table
+    return table,d
+
+def transitionTask(task):
+    print(f"Transitioning task: {task}")
+    print(state['jira'].transitions(task))
+    status = state[task].fields.status.raw['name']
+    if status == "In Progress":
+        transition = "Done"
+    else:
+        transition = "In Progress"
+    print(f'Transitioning to: {transition}')
+    state['jira'].transition_issue(task,transition)
+    init()
+
+def new_task():
+    print("Creating a new task.... (not implemented)")
+    return
+
+def getPrompt():
+    action_input = Prompt.ask("Enter the action (new, transition)")
+    if action_input=="new":
+        new_task()
+    else:
+        transition, issue = action_input.split(" ")
+        transitionTask(issue)
+    getPrompt()
 
 def display_fields(todo, progress):
     layout = Layout()
@@ -60,8 +94,9 @@ def display_fields(todo, progress):
         Layout(name="left"),
         Layout(name="right"),
     )
-    todo_table = generate_table('todo',todo)
-    prog_table = generate_table('prog',progress)
+    todo_table, todo_map = generate_table('todo',todo)
+    prog_table, prog_map = generate_table('prog',progress)
     layout["left"].update(todo_table)
     layout["right"].update(prog_table)
     p(layout)
+    return todo_map, prog_map
