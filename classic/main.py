@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from collections import Counter
 
 from jira import JIRA
@@ -32,8 +31,8 @@ jira = JIRA(
 )
 
 app = typer.Typer()
-todo_filter = 'assignee = currentUser() AND status = "To Do"'
-prog_filter = 'assignee = currentUser() AND status = "In Progress"'
+todo_filter = 'status = "To Do"'
+prog_filter = 'status = "In Progress"'
 
 state = {}
 
@@ -42,6 +41,7 @@ def init():
     todo = jira.search_issues(todo_filter)
     prog = jira.search_issues(prog_filter)
     todo, prog = display_fields(todo,prog) 
+    state['projects'] = jira.projects()
     state.update(todo)
     state.update(prog)
     state['jira'] = jira
@@ -52,6 +52,7 @@ def generate_table(title,array):
     table = Table(title = 'title')
     d = {}
     for i in array:
+        print(i.fields.issuetype)
         d[i.key] = i
         table.add_row(Panel(i.fields.summary,title=i.key))
     return table,d
@@ -70,7 +71,20 @@ def transitionTask(task):
 
 def new_task():
     print("Creating a new task.... (not implemented)")
-    return
+    summary = Prompt.ask("Enter the summary for the new issue")
+    print(state['projects'])
+    project = Prompt.ask("Enter the project")
+    fields = {
+        'project' : {'key' : project},
+        'summary' : summary,
+        'assignee': creds['user'],
+        'issuetype' : {
+            'name' : 'Task'
+        }
+    }
+    p(fields)
+    state["jira"].create_issue(fields) 
+    init()
 
 def getPrompt():
     action_input = Prompt.ask("Enter the action (new, transition)")
